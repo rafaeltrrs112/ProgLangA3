@@ -39,6 +39,10 @@ object Regex extends App {
     T(parseF(), parseT2())
   }
 
+  /**
+   *
+   * @return
+   */
   def parseT2() : Option[T2] = {
     if(inputIndex < input.length && !input.charAt(inputIndex).equals('|')){
       Some(T2(parseF(), parseT2()))
@@ -50,6 +54,10 @@ object Regex extends App {
     F(parseA, parseF2())
   }
 
+  /**
+   *
+   * @return
+   */
   def parseF2() : Option[F2] = {
     if(inputIndex < input.length && input.charAt(inputIndex) == '?'){
       inputIndex = inputIndex + 1
@@ -58,6 +66,10 @@ object Regex extends App {
     else None
   }
 
+  /**
+   *
+   * @return
+   */
   def parseA() : A = {
     if(inputIndex < input.length && input.charAt(inputIndex) != '('){
         A(parseC(), None)
@@ -68,6 +80,10 @@ object Regex extends App {
     }
   }
 
+  /**
+   *
+   * @return
+   */
   def parseA2() : Option[A2] = {
     if(inputIndex < input.length && input.charAt(inputIndex) == ')'){
       inputIndex = inputIndex + 1
@@ -78,6 +94,10 @@ object Regex extends App {
     }
   }
 
+  /**
+   *
+   * @return
+   */
   def parseC() : Option[C] = {
     if(!specialChars.contains(input.charAt(inputIndex))){
       inputIndex = inputIndex + 1
@@ -89,45 +109,45 @@ object Regex extends App {
     }
   }
 
-  def hasEven(i : Int) : Boolean = {
-    i % 2 == 0
-  }
-
-  def hasOdd(i : Int) : Boolean = {
-    i % 2 != 0
-  }
-
-  def satisfies(l : scala.collection.immutable.List[Int], predicate : Int => Boolean): Boolean ={
-    var result : Boolean = false
-    l.foreach((elem) => if(predicate(elem)){
-      result = true
-    })
-    result
-  }
-
   val state : E = parseS()
   val root : E = state
   val candidate : String = input
   var candidateIndex = 0
+  //Try to just traverse through the case tree until you reach a Char or none...and hope...
   val trace : E = E(T(F(A(Some(C('a')),None),None),Some(T2(F(A(Some(C('b')),None),None),None))),None)
 
   def matchS() : Boolean = {
-    matchE(root) && candidateIndex = candidate.length
+    matchE(root) && candidateIndex == candidate.length
   }
 
-  def matchE(e : Option[E]) : Boolean = e match {
-    case Some(s) => matchT(s.left) && matchE2(s.right)
-    case None => true
+  def matchE(e : E) : Boolean = e match {
+    case s : E =>  matchT(s.left) && matchE2(s.right)
   }
 
   def matchE2(e2 : Option[E2]) : Boolean = e2 match {
-    case Some(s) => match
+    case Some(s) => true
   }
 
-  def matchT(t : Option[T])
+  def matchT(t : T) : Boolean = {
+    case t : T => matchF(t.left) && matchT2(t.right)
+  }
 
   def matchT2(t : Option[T2]) : Boolean = t match {
-    case Some(s) => matchF(s.left) && matchT2(s.right)
+    case Some(s) => matchF(t.get.left) && matchT2(s.right)
+    case None => true
+  }
+
+  def matchF(f : F) : Boolean = f match {
+    case f : F => matchA(f.left) && matchF2(f.right)
+  }
+
+  def matchF2(f2 : Option[F2]) : Boolean = f2 match {
+    case Some(s) => //Do something similiar to the parse method but with the inputted string this time and the index of that string.
+      true
+  }
+
+  def matchA(a : A) : Boolean = a match {
+    case Some(s) => true
     case None => true
   }
 
