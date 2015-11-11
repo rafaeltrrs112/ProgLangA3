@@ -1,160 +1,216 @@
 package org.openjdk.jmh.samples
 
-
-abstract class S
-case class E(left: T, right: Option[E2]) extends S
-case class E2(left: E3) extends S
-case class E3(left: T, right: Option[E2]) extends S
-case class T(left: F, right: Option[T2]) extends S
-case class T2(left: F, right: Option[T2]) extends S
-case class F(left: A, right: Option[F2]) extends S
-case class F2(left: Option[F2]) extends S
-case class A(opt1: Option[C], opt2: Option[A2]) extends S
-case class A2(left: E) extends S
-case class C(content: Char) extends S
+abstract class RegexExp
+case class Concat(left: LeftBranch, right: Option[LeftOr]) extends RegexExp
+case class LeftOr(left: RightOr) extends RegexExp
+case class RightOr(left: LeftBranch, right: Option[LeftOr]) extends RegexExp
+case class LeftBranch(left: LeftBranchTwo, right: Option[RightBranch]) extends RegexExp
+case class RightBranch(left: LeftBranchTwo, right: Option[RightBranch]) extends RegexExp
+case class LeftBranchTwo(left: LeftParen, right: Option[Optional]) extends RegexExp
+case class Optional(left: Option[Optional]) extends RegexExp
+case class LeftParen(opt1: Option[CharacterLiteral], opt2: Option[RightParen]) extends RegexExp
+case class RightParen(left: Concat) extends RegexExp
+case class CharacterLiteral(content: Char) extends RegexExp
+case class State(position : Int)
 /**
- */
+  */
 object Regex extends App {
 
   val specialChars = collection.immutable.List('(',')', '?', '|')
-
-  var input : String = readLine("Enter a string")
+  var input : String = readLine("Enter a regex")
   var inputIndex : Int = 0
+  val result = parseS()
+  val root = result
+  val candidate = readLine("Enter a string")
+  val candidateLength = candidate.length
+  var candidateIndex = 0
+  println(result)
 
-  def parseS() : E = {parseE()}
+  def parseS() : Concat = {parseConcat()}
 
-  def parseE() : E = {E(parseT(), parseE2())}
+  def parseConcat() : Concat = {Concat(parseLeftBranch(), parseOr())}
 
-  def parseE2() : Option[E2] = {
+  def parseOr() : Option[LeftOr] = {
     if(inputIndex < input.length && input.charAt(inputIndex) == '|'){
       inputIndex = inputIndex + 1
-      Some(E2(parseE3()))
+      Some(LeftOr(parseRightOr()))
     }
     else None
   }
 
-  def parseE3() : E3 = {E3(parseT(), parseE2())}
+  def parseRightOr() : RightOr = {RightOr(parseLeftBranch(), parseOr())}
 
-  def parseT() : T = {
-    T(parseF(), parseT2())
+  def parseLeftBranch() : LeftBranch = {
+    LeftBranch(parseLeftBranchTwo(), parseRightBranch())
   }
 
   /**
-   *
-   * @return
-   */
-  def parseT2() : Option[T2] = {
+    *
+    * @return
+    */
+  def parseRightBranch() : Option[RightBranch] = {
     if(inputIndex < input.length && !input.charAt(inputIndex).equals('|')){
-      Some(T2(parseF(), parseT2()))
+      Some(RightBranch(parseLeftBranchTwo(), parseRightBranch()))
     }
     else None
   }
 
-  def parseF() : F = {
-    F(parseA, parseF2())
+  def parseLeftBranchTwo() : LeftBranchTwo = {
+    LeftBranchTwo(parseOpenGroup, parseOptional())
   }
 
   /**
-   *
-   * @return
-   */
-  def parseF2() : Option[F2] = {
+    *
+    * @return
+    */
+  def parseOptional() : Option[Optional] = {
     if(inputIndex < input.length && input.charAt(inputIndex) == '?'){
       inputIndex = inputIndex + 1
-      Some(F2(parseF2()))
+      Some(Optional(parseOptional()))
     }
     else None
   }
 
   /**
-   *
-   * @return
-   */
-  def parseA() : A = {
+    *
+    * @return
+    */
+  def parseOpenGroup() : LeftParen = {
     if(inputIndex < input.length && input.charAt(inputIndex) != '('){
-        A(parseC(), None)
+      LeftParen(parseCharacterLiteral(), None)
     }
     else {
       inputIndex = inputIndex + 1
-      A(None, parseA2())
+      LeftParen(None, parseCloseGroup())
     }
   }
 
   /**
-   *
-   * @return
-   */
-  def parseA2() : Option[A2] = {
-    if(inputIndex < input.length && input.charAt(inputIndex) == ')'){
+    *
+    * @return
+    */
+  def parseCloseGroup() : Option[RightParen] = {
+    if(inputIndex < input.length && input.charAt(inputIndex) != ')'){
+      Some(RightParen(parseConcat()))
+    }
+    else {
       inputIndex = inputIndex + 1
       None
     }
-    else {
-      Some(A2(parseE()))
-    }
   }
 
   /**
-   *
-   * @return
-   */
-  def parseC() : Option[C] = {
+    *
+    * @return
+    */
+  def parseCharacterLiteral() : Option[CharacterLiteral] = {
     if(!specialChars.contains(input.charAt(inputIndex))){
       inputIndex = inputIndex + 1
-      Some(C(input.charAt(inputIndex - 1)))
-      }
+      Some(CharacterLiteral(input.charAt(inputIndex - 1)))
+    }
     else {
       inputIndex = inputIndex + 1
       None
     }
   }
 
-  val state : E = parseS()
-  val root : E = state
-  val candidate : String = input
-  var candidateIndex = 0
-  //Try to just traverse through the case tree until you reach a Char or none...and hope...
-  val trace : E = E(T(F(A(Some(C('a')),None),None),Some(T2(F(A(Some(C('b')),None),None),None))),None)
 
-  def matchS() : Boolean = {
-    matchE(root) && candidateIndex == candidate.length
+  var currentState = State(0)
+  def matchRegExp() : Boolean = {
+    matchConcat(root) && candidateIndex == candidate.length
   }
 
-  def matchE(e : E) : Boolean = e match {
-    case s : E =>  matchT(s.left) && matchE2(s.right)
+  def matchConcat(concat : Concat) : Boolean = concat match {
+    case Concat(_, Some(lr)) => {
+      println("holding")
+      val currentIndex = candidateIndex
+      matchLeftBranch(concat.left) || {
+        println("up-top failed")
+        candidateIndex = currentIndex
+        matchLeftOr(concat.right)
+      }
+    }
+    case Concat(lb, None) => matchLeftBranch(lb)
   }
 
-  def matchE2(e2 : Option[E2]) : Boolean = e2 match {
-    case Some(s) => true
+  //Go to next character
+  def matchLeftOr(leftOr : Option[LeftOr]) : Boolean = leftOr match {
+    case Some(lr) => {
+      matchRightOr(lr.left)
+    }
+    case _ => false
   }
 
-  def matchT(t : T) : Boolean = {
-    case t : T => matchF(t.left) && matchT2(t.right)
+  def matchRightOr(right : RightOr) : Boolean = right match {
+    case RightOr(_, Some(lr)) => {
+      println("holding")
+      val currentIndex = candidateIndex
+      matchLeftBranch(right.left) || {
+        println("up-top failed")
+        candidateIndex = currentIndex
+        matchLeftOr(right.right)
+      }
+    }
+    case RightOr(lb, None) => matchLeftBranch(lb)
   }
 
-  def matchT2(t : Option[T2]) : Boolean = t match {
-    case Some(s) => matchF(t.get.left) && matchT2(s.right)
-    case None => true
+  def matchLeftBranch(t : LeftBranch) : Boolean = {
+    matchLeftBranchTwo(t.left) || matchRightBranch(t.right)
   }
 
-  def matchF(f : F) : Boolean = f match {
-    case f : F => matchA(f.left) && matchF2(f.right)
+  def matchRightBranch(rightBranch : Option[RightBranch]) : Boolean = rightBranch match {
+    case Some(s) => matchLeftBranchTwo(s.left) || matchRightBranch(s.right)
+    case None => false
   }
 
-  def matchF2(f2 : Option[F2]) : Boolean = f2 match {
-    case Some(s) => //Do something similiar to the parse method but with the inputted string this time and the index of that string.
+  def matchLeftBranchTwo(leftBranchTwo : LeftBranchTwo) : Boolean = {
+    matchLeftParen(leftBranchTwo.left) || matchOptional(leftBranchTwo.right)
+  }
+
+  //optional
+  def matchOptional(f2 : Option[Optional]) : Boolean = false
+
+  //Left-parens
+  def matchLeftParen(leftParen : LeftParen) : Boolean = {
+    leftParen match {
+      case LeftParen(Some(charLit), _) => {
+        if(charLit.content == candidate.charAt(candidateIndex)) {
+          println("got match comparing" + charLit.content + " " + candidate.charAt(candidateIndex))
+          candidateIndex += 1
+          true
+        }
+        else {
+          println("in else comparing" + charLit.content + " " + candidate.charAt(candidateIndex))
+          candidateIndex += 1
+          false
+        }
+      }
+      case LeftParen(None, rightParen) => {
+        matchCharacterLiteral(leftParen.opt1) || matchRightParen(rightParen)
+      }
+    }
+  }
+
+  //right-parens
+  def matchRightParen(rightParen: Option[RightParen]) : Boolean = rightParen match {
+    case Some(rp) => {
+      matchConcat(rp.left)
+    }
+    case _ => false
+  }
+
+  def matchCharacterLiteral(characterLiteral: Option[CharacterLiteral]) = characterLiteral match {
+    case Some(c) => if(candidate.charAt(candidateIndex) == c.content){
       true
+    }
+    else{
+      false
+    }
+    case None => false
   }
 
-  def matchA(a : A) : Boolean = a match {
-    case Some(s) => true
-    case None => true
-  }
+  Concat(LeftBranch(LeftBranchTwo(LeftParen(Some(CharacterLiteral('a')),None),None),Some(RightBranch(LeftBranchTwo(LeftParen(Some(CharacterLiteral('b')),None),None),None))),Some(LeftOr(RightOr(LeftBranch(LeftBranchTwo(LeftParen(Some(CharacterLiteral('c')),None),None),Some(RightBranch(LeftBranchTwo(LeftParen(Some(CharacterLiteral('d')),None),None),None))),None))))
 
-
-
-  state match {
-    case E(T(F(A(Some(C('a')),None),None),Some(T2(F(A(Some(C('b')),None),None),None))),None) => println(true)
-  }
-
+  val test = matchRegExp()
+  println(test)
 }
